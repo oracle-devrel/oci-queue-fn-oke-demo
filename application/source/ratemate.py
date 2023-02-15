@@ -1,3 +1,5 @@
+# Credits: https://github.com/vcdi/ratemate
+
 import multiprocessing
 import time
 from datetime import datetime, timedelta

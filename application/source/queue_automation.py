@@ -1,12 +1,6 @@
-from oci.functions import FunctionsInvokeClient, FunctionsManagementClient
-from oci.retry import DEFAULT_RETRY_STRATEGY
-from oci.auth.signers import InstancePrincipalsSecurityTokenSigner
-from oci.signer import Signer
-from oci.config import from_file
+import json
 import logging
 import logging.config
-
-import json
 import os
 import queue
 import random
@@ -28,38 +22,43 @@ from ratemate import RateLimit
 # Disable OCI SDK service import for faster module import
 os.environ["OCI_PYTHON_SDK_NO_SERVICE_IMPORTS"] = "1"
 
+from oci.functions import FunctionsInvokeClient, FunctionsManagementClient
+from oci.retry import DEFAULT_RETRY_STRATEGY
+from oci.auth.signers import InstancePrincipalsSecurityTokenSigner
+from oci.signer import Signer
+from oci.config import from_file
 
-# Setup Queues which will be used for message handling
-messages_queue = queue.Queue()
-message_receipts_queue = queue.Queue()
-
-# Queues to count failures number
+# Limits where we declare deployment unhealthy (default: 3 consecutive queues long polling failures or 10 consecutive function invocations)
 queue_long_polling_failures = queue.Queue()
 function_invocation_failures = queue.Queue()
 MAX_consecutive_queue_long_polling_failures = 3
 MAX_consecutive_function_invocation_failures = 10
 
+# Setup Queues which will be used for message handling
+messages_queue = queue.Queue()
+message_receipts_queue = queue.Queue()
 
 # Environmnet variables setup
 QUEUE_OCI_REGION = os.environ.get("QUEUE_OCI_REGION", "us-ashburn-1")
 FUNCTION_OCI_REGION = os.environ.get("FUNCTION_OCI_REGION", "eu-frankfurt-1")
 QUEUE_OCID = os.environ.get(
-    "QUEUE_OCID", "ocid1.queue.oc1.iad.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    "QUEUE_OCID", "no-queue-OCID-provided-as-environment-variable")
 FUNCTION_OCID = os.environ.get("FUNCTION_OCID",
-                               "ocid1.fnfunc.oc1.eu-frankfurt-1.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+                               "no-function-OCID-provided-as-environment-variable")
 
 STATUS_FILE_PATH = r"/tmp/healthy"
-FUNCTION_INVOKE_BODY_BATCH_SIZE = 100
-FUNCTION_INVOKE_RETURN_BATCH_FAILURE = True
-MESSAGE_DELETE_BATCH_SIZE = 20
+FUNCTION_INVOKE_BODY_BATCH_SIZE = 45 # If this value is configured over 45, make sure the payload size doesn't exceed maximum size of the body on function invocation (6MB)
+FUNCTION_INVOKE_RETURN_BATCH_FAILURE = True # If individual message processing status is returned by function
+MESSAGE_DELETE_BATCH_SIZE = 20 # Attempt to delete MESSAGE_DELETE_BATCH_SIZE in a single API call
 QUEUE_API_MAX_RETRIES = 8  # Retries will be used only for delete attempts
-QUEUE_FAST_POLLING_RPS = 400
-QUEUE_DELETE_RPS = 400
-QUEUE_FAST_POLLING_RAISE_INTERVAL = 1
-QUEUE_FAST_POLLING_MAX_FUTURES = 2000
-MAX_MESSAGES_IN_FUNCTION_INVOKE_QUEUE = 10000
+QUEUE_FAST_POLLING_RPS = 400 # Throttle queue polling API calls (used for faster processing of messages in the queue)
+QUEUE_DELETE_RPS = 400 # Throttle delete message API calls
+QUEUE_FAST_POLLING_RAISE_INTERVAL = 3 # Raise interval for fast polling requests in seconds.
+QUEUE_FAST_POLLING_MAX_FUTURES = 200 # Maximum numbers of requests pending for execution.
+MAX_MESSAGES_IN_FUNCTION_INVOKE_QUEUE = 1000 # Size of the internal buffer
 MAX_FUTURES = 500  # maximum number of futures for fast polling
 
+####################################################################################################
 fast_polling_rate_limit = RateLimit(max_count=QUEUE_FAST_POLLING_RPS, per=1)
 delete_rate_limit = RateLimit(max_count=QUEUE_DELETE_RPS, per=1)
 ####################################################################################################
@@ -67,11 +66,20 @@ delete_rate_limit = RateLimit(max_count=QUEUE_DELETE_RPS, per=1)
 # Logging setup
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger('queueEventsLogger')
-
-
 class Queue:
     _path = "20210201"
     _N = 1
+
+    def _get_queue_dp_endpoint(self):
+        with requests.Session() as session:
+            request_response = session.get(f'{self.cp_endpoint}/queues/{self.queue_ocid}',
+                auth=self.signer)
+            if request_response.status_code == 200:
+                queue_data = json.loads(request_response.text)
+                self.dp_endpoint = f"{queue_data.get('messagesEndpoint')}/{self._path}"
+            else:
+                raise(Exception(f'Could not determine queue {self.queue_ocid} DP endpoint'))
+            
 
     def __init__(self, oci_region, queue_ocid, signer, get_visibilityInSeconds=600, get_timeoutInSeconds=20, get_fast_timeoutInSeconds=3, get_limit=20, delete_timeout=5):
         self.queue_ocid = queue_ocid
@@ -82,7 +90,7 @@ class Queue:
         self.get_limit = get_limit
         self.delete_message_timeout = delete_timeout
         self.cp_endpoint = f"https://messaging.{oci_region}.oci.oraclecloud.com/{self._path}"
-        self.dp_endpoint = f"https://cell-{self._N}.queue.messaging.{oci_region}.oci.oraclecloud.com/{self._path}"
+        self._get_queue_dp_endpoint()
 
 
 class Function:
@@ -529,9 +537,11 @@ def delete_health_file(path):
 
 
 if __name__ == "__main__":
+    ## Uncommed below section in case Instance Principal authentication is not configured
+
     # Setup authentication to OCI services begin
-    # config = from_file('./config', "DEFAULT")
-    config = {"region": FUNCTION_OCI_REGION}
+    # config = from_file('~/.oci/config', "DEFAULT")
+    
     # signer = Signer(
     #     tenancy=config['tenancy'],
     #     user=config['user'],
@@ -539,7 +549,11 @@ if __name__ == "__main__":
     #     private_key_file_location=config['key_file'],
     #     pass_phrase=config['pass_phrase']
     # )
+
+    ## Uncommed below section in case Instance Principal authentication is configured
+    config = {"region": FUNCTION_OCI_REGION}
     signer = InstancePrincipalsSecurityTokenSigner()
+    
     ###############################################
 
     # Setup OCI_FUNCTION variable begin

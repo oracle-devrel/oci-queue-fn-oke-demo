@@ -30,10 +30,10 @@ spec:
         - name: QUEUE_OCI_REGION
           value: "us-ashburn-1"
         - name: QUEUE_OCID
-          value: "ocid1.queue.oc1.iad.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          value: "ocid1.queue.oc1.iad....wja"
         - name: FUNCTION_OCI_REGION
           value: "eu-frankfurt-1"
         - name: FUNCTION_OCID
-          value: "ocid1.fnfunc.oc1.eu-frankfurt-1.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"          
+          value: "ocid1.fnfunc.oc1.eu-frankfurt-1....fjyiuq"          
       imagePullSecrets:
       - name: <OCIR_secret_name>
