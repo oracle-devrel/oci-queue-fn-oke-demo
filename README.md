@@ -19,7 +19,7 @@ Resources created by this deployment are:
 
 Create a stack in ORM, load the project files, fill in all required values and click `Apply`.
 
-[![Deploy to OCI](https://docs.oracle.com/en-us/iaas/Content/Resources/Images/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/robo-cap/oci-queue-fn-oke-demo/archive/refs/tags/v1.0.zip)
+[![Deploy to OCI](https://docs.oracle.com/en-us/iaas/Content/Resources/Images/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/oracle-devrel/oci-queue-fn-oke-demo/archive/refs/tags/v1.0.zip)
 
 ### Prerequisites - Existing OKE cluster
 
