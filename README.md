@@ -4,14 +4,14 @@
 
 ## Introduction
 
-This is an example project that will enable the consumption of queue messages and will POST the messages to an OCI function provided by the user.
+This is an example project that will enable the consumption of messages in a queue and will POST the messages to an OCI function provided by the user.
 
 Resources created by this deployment are:
 - OCI DevOps project with CI/CD pipelines for queue-fn-automation application deployment.
-- OKE cluster (if required).
+- OKE Cluster (if required, otherwise existing cluster must be selected).
 - OCIR repository for the queue-fn-automation container image.
 - OKE deployment for the queue-fn-automation application.
-- Policies to enable queue-fn-automation application interaction with queues and functions (if required).
+- Policies to enable queue-fn-automation application interaction with queues and functions (if selected).
 
 ## Getting Started
 
